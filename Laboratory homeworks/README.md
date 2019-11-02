@@ -4,7 +4,7 @@
 
 RGB Led that is controlled using 3 potentiometers (1 for red, 1 for green and 1 for blue).
 
-Requirments:
+**Requirments:**
 
 1. 3 potentiometers
 2. RGB Led
