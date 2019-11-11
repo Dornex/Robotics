@@ -1,14 +1,11 @@
 # Robotics laboratory homeworks
 
-## analogRGBControl.ino
+## 1st Homework
 
-RGB Led that is controlled using 3 potentiometers (1 for red, 1 for green and 1 for blue).
+**analogRGBControl**: RGB Led that is controlled using 3 potentiometers (1 for red, 1 for green and 1 for blue).
 
-**Requirments:**
+## 2nd Homework
 
-1. 3 potentiometers
-2. RGB Led
-3. 3 resistors (220 ohm)
-4. wires
-5. Arduino
-6. Connector cable
+**knockDetectorBuzzer**: Piezo Buzzer that detects knocks over a specified threshold, and plays a sound after 5 seconds which can be stopped by pressing a pushdown button.
+
+
