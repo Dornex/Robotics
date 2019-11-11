@@ -15,8 +15,6 @@ void loop() {
   analogBlueValue = analogRead(bluePot);
   
   setColor(analogRedValue, analogGreenValue, analogBlueValue);
-  
-  delay(1); 
 }
 
 void setColor(int red, int green, int blue) {
