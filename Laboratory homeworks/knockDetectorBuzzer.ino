@@ -14,9 +14,8 @@ void loop() {
   muteIfNotKnocked();
   
   currentState = !digitalRead(buttonPin);
-  if(currentState != lastState) {
+  if(currentState != lastState)
     debounceTimer = millis();
-  }
 
   knockValue = analogRead(knockSensor);
   if(knockValue > threshold) {
@@ -33,11 +32,9 @@ void loop() {
 }
 
 void checkButtonPress() {
-  if((millis() - debounceTimer) > debounceDelay) {
-    if(currentState != buttonState) {
+  if((millis() - debounceTimer) > debounceDelay)
+    if(currentState != buttonState)
       knocked = 0;
-    }
-  }
 }
 
 void playSound() {
@@ -45,7 +42,6 @@ void playSound() {
 }
 
 void muteIfNotKnocked() {
-  if(knocked == 0) {
+  if(knocked == 0)
     analogWrite(activeBuzzerPin, 0);
-  }
 }
