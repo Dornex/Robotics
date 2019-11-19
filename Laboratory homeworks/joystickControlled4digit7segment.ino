@@ -16,7 +16,8 @@ const int pinSW = 4;
 const int segSize = 8, noOfDisplays = 4, noOfDigits = 10;
 const int minThreshold = 300, maxThreshold = 700;
 
-int lastSwitchValue;
+unsigned long blinkTime, exited = 0;
+int lastSwitchValue, blinkDelay = 400, blinks = 0;
 int switchValue, xValue, yValue;
 int currentNumber = 0, currentSelectedDigit;
 
@@ -46,8 +47,22 @@ byte digitMatrix[noOfDigits][segSize - 1] = {
   {1, 1, 1, 1, 0, 1, 1}  // 9
 };
 
-void displayDigit(byte digit, byte decimalPoint) {
-  digitalWrite(segments[segSize - 1], decimalPoint);
+void displayDigit(byte digit) {
+  digitalWrite(segments[segSize - 1], LOW);
+  
+  for (int i = 0; i < segSize - 1; i++) {
+   digitalWrite(segments[i], digitMatrix[digit][i]);
+  }  
+}
+
+void displayWithBlink(byte digit) {
+
+  if(millis() - blinkTime >= blinkDelay && digitNotSelected == true) {
+     blinkTime = millis();
+     blinks = blinks + 1;
+     digitalWrite(segments[segSize - 1], blinks % 2);
+  }
+  else if(digitNotSelected == false) digitalWrite(segments[segSize - 1], HIGH);  
   
   for (int i = 0; i < segSize - 1; i++) {
    digitalWrite(segments[i], digitMatrix[digit][i]);
@@ -63,6 +78,7 @@ void showDigit(int num) {
 }
 
 void setup() {
+  blinkTime = millis();
   pinMode(pinDP, OUTPUT);   
   pinMode(pinSW, INPUT_PULLUP);
   for (int i = 0; i < segSize - 1; i++) {
@@ -90,9 +106,9 @@ void displayNumber() {
   for(int i = 0; i < 4; i++) {
     showDigit(i);
     if(i != currentSelectedDigit)
-      displayDigit(number[i], LOW); 
+      displayDigit(number[i]); 
     else
-      displayDigit(number[i], HIGH); 
+      displayWithBlink(number[i]); 
     delay(5);
   }
 }
