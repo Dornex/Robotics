@@ -22,7 +22,6 @@ LiquidLine level_line(0, 1, "Lives:");
 LiquidLine lives_line(8, 1, "Level:");
 LiquidScreen game_screen(score_line, level_line, lives_line);
 
-
 #define  LCD_ROWS  2
 #define  LCD_COLS  16
 const byte startingScreen = 1;
@@ -49,10 +48,10 @@ int playerPos = 4;
 int xValue, yValue;
 const int movementDelay = 200, shootDelay = 400, bulletDelay = 100, invulnDelay = 6000, gameOverNextScreen = 10000, refreshRate = 60;
 unsigned long movementTime, shootTime, lastInvulnTime, gameOverTime, lastRefresh;
-byte swValue, buttonValue, lastSwValue, yAxisNotMoved;
-const int noOfBullets = 10, noOfLevels = 5;
+byte swValue, buttonValue, lastSwValue, yAxisNotMoved, lastButtonValue;
+const int noOfBullets = 15, noOfLevels = 6;
 int levelNumber = -1;
-int numberOfEnemies = 0, noOfEnemies = 0;
+int noOfEnemies = 0;
 long randNumber;
 int lives;
 int score;
@@ -62,17 +61,15 @@ struct Enemie {
   int movementSpeed;
   int posX, posY;
   int spawnTime;
-  bool spawned = false;
 }; 
 
 // Numbers of enemies generated each level
-int level[noOfLevels] = {8, 14, 20, 27, 35}; 
+int level[noOfLevels] = {8, 14, 20, 27, 35, 40}; 
 
 struct Bullet {
   int posX;
   int posY;
   int movementDelay;
-  bool spawned;
 } bullets[noOfBullets];
 
 LedControl lc = LedControl(din, clk, load, 2);
@@ -84,6 +81,7 @@ LiquidSystem menus(1);
 void setup() {
   randomSeed(analogRead(A5));
   lcd.begin(16, 2);
+  Serial.begin(9600);
 
   play_line.attach_function(1, playGame);
   
@@ -100,7 +98,7 @@ void setup() {
   menus.update();
  
   for(int i = 0; i < noOfBullets; i++)
-    bullets[i].spawned = false;
+    bullets[i].posX = -3;
     
   pinMode(joySW, INPUT_PULLUP);
   pinMode(buttonPin, INPUT_PULLUP);
@@ -122,7 +120,7 @@ void navigateMenu() {
   xValue = analogRead(joyX);
   yValue = analogRead(joyY);
   swValue = !digitalRead(joySW);
-  buttonValue = digitalRead(buttonPin);
+  buttonValue = !digitalRead(buttonPin);
  
   if(yValue < minThreshold && yAxisNotMoved) {
     menu.previous_screen();
@@ -137,10 +135,11 @@ void navigateMenu() {
   else if(yValue < maxThreshold && yValue > minThreshold)
     yAxisNotMoved = 1;
 
-  if(swValue == 1 && swValue != lastSwValue) {
+  if((swValue == 1 || buttonValue == 1) && (swValue != lastSwValue || buttonValue != lastButtonValue)) {
     menu.call_function(1); 
   }
   
+  lastButtonValue = buttonValue;
   lastSwValue = swValue;
   
 }
@@ -164,15 +163,13 @@ void playGame() {
     lcd.print(lives);
     lcd.setCursor(15, 1);
     lcd.print(levelNumber);
-    lcd.setCursor(0, 0);
-    lcd.print(numberOfEnemies);
 
     if(millis() - lastRefresh > refreshRate) {
       lastRefresh = millis();
       lcd.clear();
       game_menu.update();
     }
-    if(numberOfEnemies == 0)
+    if(checkLevelOver(enemies))
        enemies = createLevel();
     showPlayer();
     getPlayerMovement();
@@ -182,7 +179,7 @@ void playGame() {
     updateEnemies(enemies);
     checkPlayerCollision(enemies);
     checkBulletEnemiesCollision(enemies);
-    
+
     if(checkGameOver()) {
       gameOverTime = millis();
       break;
@@ -191,10 +188,24 @@ void playGame() {
   gameOver();
 }
 
+bool checkLevelOver(Enemie *enemies) {
+  int numberOfDeadEnemies = 0;
+  for(int i = 0; i < noOfEnemies; i++) {
+    if(enemies[i].posX == -7)
+      numberOfDeadEnemies++;
+  }
+
+  if(numberOfDeadEnemies == noOfEnemies) {
+    delete[] enemies;
+    return 1;
+  }
+  return 0;
+}
+
 void checkBulletEnemiesCollision(Enemie *enemies) {
   for(int i = 0; i < noOfBullets; i++) 
     for(int j = 0; j < noOfEnemies; j++) {
-      if(bullets[i].spawned = true && enemies[j].spawned == true) {
+      if(bullets[i].posX != -3 && enemies[j].posX != -7) {
         if((bullets[i].posX == enemies[j].posX && bullets[i].posY == enemies[j].posY) || 
             (bullets[i].posX == enemies[j].posX - 1 && bullets[i].posY == enemies[j].posY - 1) ||
             (bullets[i].posX == enemies[j].posX + 1 && bullets[i].posY == enemies[j].posY - 1)) {
@@ -213,10 +224,9 @@ void checkBulletEnemiesCollision(Enemie *enemies) {
                 lc.setLed(1, enemies[j].posY % 8, enemies[j].posX, false);
                 lc.setLed(1, enemies[j].posY % 8 - 1, enemies[j].posX + 1, false);
               }
-              enemies[j].spawned = false;
-              bullets[i].spawned = false;
-              score += levelNumber * 10;
-              numberOfEnemies--;
+              enemies[j].posX = -7;
+              bullets[i].posX = -3;
+              score += (levelNumber + 1) * 10;
             }
       }
     }
@@ -252,10 +262,9 @@ void gameOver() {
 void showEnemies(Enemie *enemies) {
   for(int i = 0; i < noOfEnemies; i++) {
     if(enemies[i].posY == 16)
-      enemies[i].spawned = false;
+      enemies[i].posX = -7;
         
-    if(millis() - enemies[i].createdTime > enemies[i].spawnTime && enemies[i].spawned == true) {
-      enemies[i].spawned = true;
+    if(millis() - enemies[i].createdTime > enemies[i].spawnTime && enemies[i].posX != -7) {
       if(enemies[i].posY < 8) {
         lc.setLed(0, enemies[i].posY - 1, enemies[i].posX - 1, true);
         lc.setLed(0, enemies[i].posY, enemies[i].posX, true);
@@ -272,8 +281,8 @@ void showEnemies(Enemie *enemies) {
 
 void updateEnemies(Enemie *enemies) {
   for(int i = 0; i < noOfEnemies; i++) {
-    if(millis() - enemies[i].createdTime > enemies[i].spawnTime) {
-      if(millis() - enemies[i].movementTime > enemies[i].movementSpeed && enemies[i].spawned == true) {
+    if(millis() - enemies[i].createdTime > enemies[i].spawnTime && enemies[i].posX != -7) {
+      if(millis() - enemies[i].movementTime > enemies[i].movementSpeed && enemies[i].posX != -7) {
         if(enemies[i].posY < 8) {
           lc.setLed(0, enemies[i].posY - 1, enemies[i].posX - 1, false);
           lc.setLed(0, enemies[i].posY, enemies[i].posX, false);
@@ -294,26 +303,26 @@ void updateEnemies(Enemie *enemies) {
 Enemie *createLevel() {
   levelNumber++;
   const int levelNumberOfEnemies = level[levelNumber];
-  
-  numberOfEnemies = levelNumberOfEnemies;
   noOfEnemies = levelNumberOfEnemies;
+
+  int counter = 1000;
   
   Enemie *enemies = new Enemie[levelNumberOfEnemies];
   for(int i = 0; i < levelNumberOfEnemies; ++i) {
-    enemies[i].posY = 0;
+    enemies[i].posY = -2;
     enemies[i].posX = random(1, 6);
     enemies[i].movementTime = millis();
-    enemies[i].movementSpeed = 200;
-    enemies[i].spawnTime = random(400, 4000);
+    enemies[i].movementSpeed = (7 - levelNumber) * 50;
+    enemies[i].spawnTime = counter;
     enemies[i].createdTime = millis();
-    enemies[i].spawned = false;
+    counter += 1500;
   }
   return enemies;
 }
 
 void updateBullets() {
   for(int i = 0; i < noOfBullets; i++) {
-    if(bullets[i].spawned == true && millis() - bullets[i].movementDelay > bulletDelay) {
+    if(bullets[i].posX != -3 && millis() - bullets[i].movementDelay > bulletDelay) {
       if(bullets[i].posY > 7)
         lc.setLed(1, bullets[i].posY % 8, bullets[i].posX, false);
       else 
@@ -325,14 +334,23 @@ void updateBullets() {
 }
 
 void showBullets() {
+  
   for(int i = 0; i < noOfBullets; i++) {
-    if(bullets[i].posY == -1)
-      bullets[i].spawned = false;
-    if(bullets[i].spawned == true)
+//    Serial.print("[");
+//    Serial.print(bullets[i].posX);
+//    Serial.print(", ");
+//    Serial.print(bullets[i].posY);
+//    Serial.print("], ");
+    if(bullets[i].posY == 0)
+      bullets[i].posX = -3;
+      
+    if(bullets[i].posX != -3)
       if(bullets[i].posY > 7)
         lc.setLed(1, bullets[i].posY % 8, bullets[i].posX, true);
-      else lc.setLed(0, bullets[i].posY, bullets[i].posX, true);
+      else 
+        lc.setLed(0, bullets[i].posY, bullets[i].posX, true);
   }
+//  Serial.println();
 }
 
 void showPlayer() {
@@ -354,7 +372,7 @@ void getPlayerMovement() {
   xValue = analogRead(joyX);
   yValue = analogRead(joyY);
   swValue = !digitalRead(joySW);
-  buttonValue = digitalRead(buttonPin);
+  buttonValue = !digitalRead(buttonPin);
 
   if(xValue < minThreshold && millis() - movementTime >= movementDelay) {
     playerPos++;
@@ -365,7 +383,7 @@ void getPlayerMovement() {
     movementTime = millis();
   }
 
-  if(swValue == 1 && millis() - shootTime > shootDelay) {
+  if((swValue == 1 || buttonValue == 1) && millis() - shootTime > shootDelay) {
     playerShoot();
     shootTime = millis();
   }
@@ -375,10 +393,9 @@ void playerShoot() {
   Bullet bullet;
   bullet.posX = playerPos;
   bullet.posY = 15;
-  bullet.spawned = true;
   bullet.movementDelay = millis();
   for(int i = 0; i < noOfBullets; i++)
-    if(bullets[i].spawned == false) {
+    if(bullets[i].posX == -3) {
       bullets[i] = bullet;
       break;
     }
