@@ -6,7 +6,7 @@ It is also called Infinity because after beating 5 levels, the player can choose
 
 ## Game specifications
 
-The game has a scoring system where you get points for destroying enemy ships, bonus score for clearing levels without taking damage, 
+The game has a scoring system where you get points for destroying enemy ships, **bonus score for clearing levels without taking damage**.
 
 The difficulty of the game will increase with each level. Enemies will travel faster towards you.
 
