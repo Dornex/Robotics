@@ -1,6 +1,27 @@
 #include "LedControl.h"
 #include <LiquidCrystal.h>
 #include <LiquidMenu.h>
+#include <EEPROM.h>
+
+// All used pins
+const int RS = 2;
+const int enable = 5;
+const int d4 = 4;
+const int d5 = 7;
+const int contrast = 3;
+const int d6 = 8;
+const int d7 = 12;
+const int din = 13;
+const int clk = 9;
+const int load = 6;
+const int buttonPin = 10;
+const int joyX = A1;
+const int joyY = A0;
+const int joySW = 11;
+const byte startingScreen = 1;
+
+LedControl lc = LedControl(din, clk, load, 2);
+LiquidCrystal lcd(RS, enable, d4, d5, d6, d7);
 
 LiquidLine press_line(1, 1, "Press to enter");
 
@@ -22,155 +43,610 @@ LiquidLine level_line(0, 1, "Lives:");
 LiquidLine lives_line(8, 1, "Level:");
 LiquidScreen game_screen(score_line, level_line, lives_line);
 
+LiquidLine highscore_line2(0, 0, "#1: ");
+LiquidLine highscore_line3(0, 1, "#2: ");
+LiquidScreen highscore_screen2(highscore_line2, highscore_line3);
+
+//LiquidLine settings_line2(0, 0, "Name:");
+//LiquidLine settings_line3(0, 1, "Starting Level:");
+//LiquidScreen settings_screen2(settings_line2, settings_line3);
+
+//LiquidLine name_line(0, 0, "Dorneanu Eduard");
+//LiquidLine unibuc_line(16, 0, "@UnibucRobotics");
+//LiquidLine git_line(0, 1, "git:Dornex");
+//LiquidLine gameName_line(12, 1, "Space Invaders Infinity");
+//LiquidScreen info_screen2(name_line, git_line, gameName_line, unibuc_line);
+
+LiquidLine info_line(5, 0, "Info");
+LiquidScreen info_screen(info_line, press_line);
+
+
+//LiquidMenu settings_menu(lcd, startingScreen);
+LiquidMenu menu(lcd, startingScreen);
+LiquidMenu game_menu(lcd, startingScreen);
+LiquidMenu highscore_menu(lcd, startingScreen);
+//LiquidMenu info_menu(lcd, startingScreen);
+LiquidSystem menus(1);
+
 #define  LCD_ROWS  2
 #define  LCD_COLS  16
-const byte startingScreen = 1;
-
-// All used pins
-const int RS = 2;
-const int enable = 5;
-const int d4 = 4;
-const int d5 = 7;
-const int contrast = 3;
-const int d6 = 8;
-const int d7 = 12;
-const int din = 13;
-const int clk = 9;
-const int load = 6;
-const int buttonPin = 10;
-const int joyX = A1;
-const int joyY = A0;
-const int joySW = 11;
 
 // Variables used
 const int maxThreshold = 700, minThreshold = 300;
 int playerPos = 4;
 int xValue, yValue;
-const int movementDelay = 200, shootDelay = 400, bulletDelay = 100, invulnDelay = 6000, gameOverNextScreen = 10000, refreshRate = 60;
-unsigned long movementTime, shootTime, lastInvulnTime, gameOverTime, lastRefresh;
-byte swValue, buttonValue, lastSwValue, yAxisNotMoved, lastButtonValue;
-const int noOfBullets = 15, noOfLevels = 6;
+const int movementDelay = 100, shootDelay = 400, bulletDelay = 3, invulnDelay = 500, gameOverNextScreen = 10000, refreshRate = 60, enemyCreateDelay = 1000, debounceDelay = 100;
+unsigned long movementTime, shootTime, lastInvulnTime, gameOverTime, lastRefresh, enemyCreateTime, lastDebounceTime;
+bool swValue, buttonValue, lastSwValue, yAxisNotMoved, xAxisNotMoved, lastButtonValue, isGameOver, noDamageTakenCurrentLevel = true;
+const int noOfBullets = 5, noOfLevels = 6;
 int levelNumber = -1;
 int noOfEnemies = 0;
 long randNumber;
 int lives;
-int score;
+unsigned int score;
+int enemyCounter;
+int enemiesMovementSpeed;
+int maxNumberOfEnemies = 6;
+int enemiesDefeated = 0;
+const int highscoreAddress1 = 0, highscoreAddress2 = 32;
+char playerName[8];
+
+byte leftInf[8] = {
+  B00000,
+  B01100,
+  B10010,
+  B10001,
+  B10001,
+  B10010,
+  B01100,
+  B00000
+};
+
+byte rightInf[8] = {
+  B00000,
+  B00110,
+  B01001,
+  B10001,
+  B10001,
+  B01001,
+  B00110,
+  B00000
+};
 
 struct Enemie {
   unsigned long createdTime, movementTime;
-  int movementSpeed;
   int posX, posY;
-  int spawnTime;
-}; 
+  bool created;
+};
 
 // Numbers of enemies generated each level
-int level[noOfLevels] = {8, 14, 20, 27, 35, 40}; 
+int level[noOfLevels] = {5, 10, 15, 20, 25, 0};
 
 struct Bullet {
+  unsigned long movementDelay;
   int posX;
   int posY;
-  int movementDelay;
 } bullets[noOfBullets];
 
-LedControl lc = LedControl(din, clk, load, 2);
-LiquidCrystal lcd(RS, enable, d4, d5, d6, d7);
-LiquidMenu menu(lcd, startingScreen);
-LiquidMenu game_menu(lcd, startingScreen);
-LiquidSystem menus(1);
+struct highscore {
+  int score;
+  char name[8];
+};
 
 void setup() {
+  strcpy(playerName, "Unknown");
   randomSeed(analogRead(A5));
   lcd.begin(16, 2);
-  Serial.begin(9600);
-
-  play_line.attach_function(1, playGame);
-  
-  menu.add_screen(start_screen);
-  menu.add_screen(play_screen);
-  menu.add_screen(settings_screen);
-  menu.add_screen(highscore_screen);
-  menu.update();
-
-  game_menu.add_screen(game_screen);
-
-  menus.add_menu(menu);
-  menus.add_menu(game_menu);
-  menus.update();
- 
-  for(int i = 0; i < noOfBullets; i++)
-    bullets[i].posX = -3;
-    
-  pinMode(joySW, INPUT_PULLUP);
-  pinMode(buttonPin, INPUT_PULLUP);
-  
-  for(int i = 0; i < lc.getDeviceCount(); i++) {
+  lcd.createChar(0, leftInf);
+  lcd.createChar(1, rightInf);
+  for (int i = 0; i < lc.getDeviceCount(); i++) {
     lc.setIntensity(i, 2);
     lc.shutdown(i, false);
     lc.clearDisplay(i);
   }
-  
+
+
+//  info_line.attach_function(1, viewInfo);
+  play_line.attach_function(1, playGame);
+  highscore_line.attach_function(1, viewHighscore);
+//  settings_line.attach_function(1, viewSettings);
+
+  menu.add_screen(start_screen);
+  menu.add_screen(play_screen);
+  menu.add_screen(settings_screen);
+  menu.add_screen(highscore_screen);
+//  menu.add_screen(info_screen);
+  menu.update();
+
+//  info_menu.add_screen(info_screen2);
+//  info_menu.update();
+//  settings_menu.add_screen(settings_screen2);
+//  settings_menu.update();
+  game_menu.add_screen(game_screen);
+  game_menu.update();
+  highscore_menu.add_screen(highscore_screen2);
+  highscore_menu.update();
+
+  menus.add_menu(menu);
+  menus.add_menu(game_menu);
+  menus.add_menu(highscore_menu);
+//  menus.add_menu(settings_menu);
+//  menus.add_menu(info_menu);
+  menus.update();
+
+  for (int i = 0; i < noOfBullets; i++)
+    bullets[i].posX = -3;
+
+  pinMode(joySW, INPUT_PULLUP);
+  pinMode(buttonPin, INPUT_PULLUP);
+
   analogWrite(contrast, 90);
 }
 
 void loop() {
-  navigateMenu();
+    navigateMenu();
+//  viewSettings();
 }
 
 void navigateMenu() {
+  readJoystickValues();
+  if (yValue < minThreshold && yAxisNotMoved) {
+    menu.previous_screen();
+    menu.set_focusedLine(0);
+    yAxisNotMoved = 0;
+  }
+  else if (yValue > maxThreshold && yAxisNotMoved) {
+    menu.next_screen();
+    menu.set_focusedLine(0);
+    yAxisNotMoved = 0;
+  }
+  else if (yValue < maxThreshold && yValue > minThreshold)
+    yAxisNotMoved = 1;
+
+  if ((swValue == 1 || buttonValue == 1) && (swValue != lastSwValue || buttonValue != lastButtonValue)) {
+    lastDebounceTime = millis();
+  }
+
+  if (millis() - lastDebounceTime > debounceDelay)
+    if (buttonValue != lastButtonValue || swValue != lastSwValue)
+      menu.call_function(1);
+
+
+  lastButtonValue = buttonValue;
+  lastSwValue = swValue;
+}
+
+//void viewInfo() {
+////  menus.change_menu(info_menu);
+//  menus.update();
+//  while(1) {
+//    xValue = analogRead(joyX);
+//    if (xValue > maxThreshold)
+//      break;
+//    lcd.scrollDisplayLeft();
+//    delay(250);
+//  }
+//}
+
+//void viewSettings() {
+//  menus.change_menu(settings_menu);
+//  menus.update();
+//  int level = 1;
+//  int index = 0;
+//  unsigned long blinkTime = 0, refreshLCD = 0;
+//  const int blinkDelay = 500, refreshRate = 800;
+//  lcd.setCursor(6, 0);
+//  lcd.print(playerName);
+//
+//  bool selectedBlink = 1;
+//  bool blinking = true;
+//  while (1) {
+//
+//    yValue = analogRead(joyY);
+//    swValue = !digitalRead(joySW);
+//    buttonValue = !digitalRead(buttonPin);
+//
+//    if (yValue < minThreshold && yAxisNotMoved) {
+//      selectedBlink = !selectedBlink;
+//      yAxisNotMoved = 0;
+//    }
+//    else if (yValue > maxThreshold && yAxisNotMoved) {
+//      selectedBlink = !selectedBlink;
+//      yAxisNotMoved = 0;
+//    }
+//    else if (yValue < maxThreshold && yValue > minThreshold)
+//      yAxisNotMoved = 1;
+//
+//    if (selectedBlink == 0) {
+//      if (millis() - blinkTime > blinkDelay) {
+//        blinkTime = millis();
+//        if (blinking == 0) {
+//          for (int i = 6; i < 13; i++) {
+//            lcd.setCursor(i, 0);
+//            lcd.print(playerName[i - 6]);
+//          }
+//        }
+//        else {
+//          for (int i = 6; i < 13; i++) {
+//            lcd.setCursor(i, 0);
+//            lcd.print(" ");
+//          }
+//        }
+//        blinking = !blinking;
+//      }
+//    }
+//    else {
+//      lcd.setCursor(6, 0);
+//      lcd.print(playerName);
+//    }
+//
+//    if (selectedBlink == 1) {
+//      if (millis() - blinkTime > blinkDelay) {
+//        blinkTime = millis();
+//        if (blinking == 0) {
+//          lcd.setCursor(15, 1);
+//          lcd.print(level);
+//        } else {
+//          lcd.setCursor(15, 1);
+//          lcd.print(" ");
+//        }
+//      }
+//      blinking = !blinking;
+//    }
+//    else {
+//      lcd.setCursor(15, 1);
+//      lcd.print(level);
+//    }
+//
+//    if (millis() - refreshLCD > refreshRate) {
+//      lcd.clear();
+//      settings_menu.update();
+//      refreshLCD = millis();
+//    }
+//
+//    lastButtonValue = buttonValue;
+//    lastSwValue = swValue;
+//  }
+//}
+
+
+void viewHighscore() {
+  menus.change_menu(highscore_menu);
+  menus.update();
+
+  highscore high1;
+  highscore high2;
+  EEPROM.get(highscoreAddress1, high1);
+  EEPROM.get(highscoreAddress2, high2);
+  while (1) {
+    xValue = analogRead(joyX);
+    if (xValue > maxThreshold)
+      break;
+
+    lcd.setCursor(3, 0);
+    lcd.print(high1.name);
+    lcd.setCursor(11, 0);
+    lcd.print(high1.score);
+    lcd.setCursor(3, 1);
+    lcd.print(high2.name);
+    lcd.setCursor(11, 1);
+    lcd.print(high2.score);
+  }
+}
+
+void readJoystickValues() {
   xValue = analogRead(joyX);
   yValue = analogRead(joyY);
   swValue = !digitalRead(joySW);
   buttonValue = !digitalRead(buttonPin);
- 
-  if(yValue < minThreshold && yAxisNotMoved) {
-    menu.previous_screen();
-    menu.switch_focus();
-    yAxisNotMoved = 0;
-  }  
-  else if(yValue > maxThreshold && yAxisNotMoved) {
-    menu.next_screen();
-    menu.switch_focus();
-    yAxisNotMoved = 0;
-  }
-  else if(yValue < maxThreshold && yValue > minThreshold)
-    yAxisNotMoved = 1;
-
-  if((swValue == 1 || buttonValue == 1) && (swValue != lastSwValue || buttonValue != lastButtonValue)) {
-    menu.call_function(1); 
-  }
-  
-  lastButtonValue = buttonValue;
-  lastSwValue = swValue;
-  
 }
 
 void checkBoundaries() {
-  if(playerPos == 0) playerPos = 1;
-  else if(playerPos == 7) playerPos = 6;
+  if (playerPos == 0) playerPos = 1;
+  else if (playerPos == 7) playerPos = 6;
+}
+
+void infinityLevel() {
+  //  infinityStory();
+  levelNumber++;
+  menus.change_menu(game_menu);
+  menus.update();
+  Enemie *enemies = new Enemie[maxNumberOfEnemies];
+  noOfEnemies = maxNumberOfEnemies;
+  enemiesDefeated = 0;
+
+  for (int i = 0; i < maxNumberOfEnemies; ++i) {
+    enemies[i].posY = -2;
+    enemies[i].posX = random(1, 6);
+    enemies[i].movementTime = millis();
+    enemies[i].createdTime = millis();
+    enemies[i].created = false;
+  }
+
+  while (1) {
+    printGameLCD();
+    refreshGameLCD();
+
+    showPlayer();
+    getPlayerMovement();
+
+    updateBullets();
+    showBullets();
+
+    checkPlayerCollision(enemies);
+    checkBulletEnemiesCollision(enemies);
+
+    checkFreeEnemieSpace(enemies);
+    showEnemies(enemies);
+    updateEnemies(enemies);
+
+    if (enemiesDefeated % 50 == 0)
+      shop();
+
+    if (enemyCounter == 6) enemyCounter = 0;
+    if (checkGameOver()) {
+      gameOverTime = millis();
+      break;
+    }
+  }
+  gameOver();
+}
+
+void increaseDifficulty() {
+  if (enemiesDefeated % 15 == 0)
+    enemiesMovementSpeed -= 5;
+
+  if (enemiesMovementSpeed < 15)
+    enemiesMovementSpeed = 15;
+}
+
+void checkFreeEnemieSpace(Enemie *enemies) {
+  for (int i = 0; i < maxNumberOfEnemies; i++) {
+    if (enemies[i].posX == -7) {
+      Enemie enemie;
+      enemie.posY = -2;
+      enemie.posX = random(1, 6);
+      enemie.movementTime = millis();
+      enemie.createdTime = millis();
+      enemie.created = false;
+      enemies[i] = enemie;
+    }
+  }
+}
+
+void infinityStory() {
+  lcd.clear();
+  lcd.setCursor(4, 0);
+  lcd.print("Congrats! You reached INFINITY!");
+  for (int i = 0; i < 24; i++) {
+    lcd.scrollDisplayLeft();
+    delay(250);
+  }
+
+  delay(2000);
+  lcd.clear();
+  lcd.setCursor(2, 0);
+  lcd.print("Everything will get harder as you play");
+  for (int i = 0; i < 26; i++) {
+    lcd.scrollDisplayLeft();
+    delay(250);
+  }
+
+  delay(2000);
+  lcd.clear();
+  lcd.setCursor(2, 0);
+  lcd.print("Every 50 enemies defeated => life shop");
+  for (int i = 0; i < 25; i++) {
+    lcd.scrollDisplayLeft();
+    delay(250);
+  }
+  delay(2000);
+  lcd.clear();
+}
+
+void printGameLCD() {
+  lcd.setCursor(10, 0);
+  lcd.print(score);
+  lcd.setCursor(6, 1);
+  lcd.print(lives);
+  lcd.setCursor(15, 1);
+  if (levelNumber + 1 > noOfLevels) {
+    lcd.setCursor(14, 1);
+    lcd.write(byte(0));
+    lcd.setCursor(15, 1);
+    lcd.write(byte(1));
+  }
+  else lcd.print(levelNumber + 1);
+}
+
+void refreshLCD() {
+  if (millis() - lastRefresh > refreshRate) {
+    lastRefresh = millis();
+    lcd.clear();
+  }
+}
+
+void refreshGameLCD() {
+  if (millis() - lastRefresh > refreshRate) {
+    lastRefresh = millis();
+    lcd.clear();
+    game_menu.update();
+  }
+}
+//
+//void refreshSettingsLCD() {
+//  if (millis() - lastRefresh > refreshRate) {
+//    lastRefresh = millis();
+//    lcd.clear();
+//    settings_menu.update();
+//  }
+//}
+
+void printShopLCD(int currentPos) {
+  lcd.setCursor(0, 0);
+  lcd.print("lives++ for 1000");
+  lcd.setCursor(0, 1);
+  lcd.print("Score:    Yes No");
+  lcd.setCursor(6, 1);
+  lcd.print(score);
+  lcd.setCursor(currentPos, 1);
+  lcd.print(">");
+}
+
+void shop() {
+  lcd.clear();
+  int yesPos = 9;
+  int noPos = 13;
+  int currentPos = yesPos;
+
+  printShopLCD(currentPos);
+  enemiesDefeated++;
+
+  while (swValue == 1 || buttonValue == 1) {
+    swValue = !digitalRead(joySW);
+    buttonValue = !digitalRead(buttonPin);
+  }
+  while (1) {
+    printShopLCD(currentPos);
+    readJoystickValues();
+
+    if (xValue < minThreshold && xAxisNotMoved) {
+      if (currentPos == yesPos)
+        currentPos = noPos;
+      else currentPos = yesPos;
+      xAxisNotMoved = 0;
+    }
+    else if (xValue > maxThreshold && xAxisNotMoved) {
+      if (currentPos == yesPos)
+        currentPos = noPos;
+      else currentPos = yesPos;
+      xAxisNotMoved = 0;
+    }
+    else if (xValue < maxThreshold && xValue > minThreshold)
+      xAxisNotMoved = 1;
+
+    if ((swValue == 1 || buttonValue == 1) && (swValue != lastSwValue || buttonValue != lastButtonValue)) {
+      if (currentPos == yesPos) {
+        if (score < 1000) {
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("Not enough score!");
+          lcd.setCursor(0, 1);
+          lcd.print("Next level coming");
+          delay(5000);
+          break;
+        }
+        lives++;
+        score -= 1000;
+      }
+      break;
+    }
+
+    lastButtonValue = buttonValue;
+    lastSwValue = swValue;
+  }
+}
+
+bool checkLevelOver(Enemie *enemies) {
+  int numberOfDeadEnemies = 0;
+  for (int i = 0; i < noOfEnemies; i++) {
+    if (enemies[i].posX == -7)
+      numberOfDeadEnemies++;
+  }
+
+  if (numberOfDeadEnemies == noOfEnemies) {
+    delete[] enemies;
+    return 1;
+  }
+  return 0;
+}
+
+void checkBulletEnemiesCollision(Enemie *enemies) {
+  for (int i = 0; i < noOfBullets; i++)
+    for (int j = 0; j < noOfEnemies; j++) {
+      if (bullets[i].posX != -3 && enemies[j].posX != -7) {
+        if ((bullets[i].posX == enemies[j].posX && bullets[i].posY == enemies[j].posY) ||
+            (bullets[i].posX == enemies[j].posX - 1 && bullets[i].posY == enemies[j].posY - 1) ||
+            (bullets[i].posX == enemies[j].posX + 1 && bullets[i].posY == enemies[j].posY - 1) ||
+            (bullets[i].posX == enemies[j].posX && bullets[i].posY == enemies[j].posY - 1) ||
+            (bullets[i].posX == enemies[j].posX - 1 && bullets[i].posY == enemies[j].posY - 2) ||
+            (bullets[i].posX == enemies[j].posX + 1 && bullets[i].posY == enemies[j].posY - 2)) {
+          if (bullets[i].posY > 7)
+            lc.setLed(1, bullets[i].posY % 8, bullets[i].posX, false);
+          else
+            lc.setLed(0, bullets[i].posY, bullets[i].posX, false);
+
+          if (enemies[j].posY < 8) {
+            lc.setLed(0, enemies[j].posY - 1, enemies[j].posX - 1, false);
+            lc.setLed(0, enemies[j].posY, enemies[j].posX, false);
+            lc.setLed(0, enemies[j].posY - 1, enemies[j].posX + 1, false);
+          }
+          else {
+            lc.setLed(1, enemies[j].posY % 8 - 1, enemies[j].posX - 1, false);
+            lc.setLed(1, enemies[j].posY % 8, enemies[j].posX, false);
+            lc.setLed(1, enemies[j].posY % 8 - 1, enemies[j].posX + 1, false);
+          }
+          enemies[j].posX = -7;
+          bullets[i].posX = -3;
+          score += random(0, (levelNumber + 2) * 15);
+          enemiesDefeated++;
+          if (levelNumber + 1 > noOfLevels)
+            increaseDifficulty();
+        }
+      }
+    }
+}
+
+void checkPlayerCollision(Enemie *enemies) {
+  for (int i = 0; i < noOfEnemies; i++) {
+    if (((enemies[i].posY == 15 && enemies[i].posX == playerPos) ||
+         (enemies[i].posY == 15 && enemies[i].posX == playerPos - 1) ||
+         (enemies[i].posY == 15 && enemies[i].posX == playerPos + 1)) &&
+        millis() - lastInvulnTime > invulnDelay) {
+      lastInvulnTime = millis();
+      enemies[i].posX = -7;
+      lives--;
+      noDamageTakenCurrentLevel = false;
+    }
+  }
+}
+
+bool checkGameOver() {
+  if (lives == 0)
+    return 1;
+  return 0;
 }
 
 void playGame() {
   Enemie *enemies = new Enemie;
+  isGameOver = false;
   menus.change_menu(game_menu);
   menus.update();
   lives = 3;
   score = 0;
-  
-  while(1) {
-    lcd.setCursor(10, 0);
-    lcd.print(score);
-    lcd.setCursor(6, 1);
-    lcd.print(lives);
-    lcd.setCursor(15, 1);
-    lcd.print(levelNumber);
+  levelNumber = -1;
+  for (int i = 0; i < lc.getDeviceCount(); i++)
+    lc.clearDisplay(i);
 
-    if(millis() - lastRefresh > refreshRate) {
-      lastRefresh = millis();
-      lcd.clear();
-      game_menu.update();
+  while (1) {
+    printGameLCD();
+    refreshGameLCD();
+
+    if (levelNumber == -1)
+      enemies = createLevel();
+
+    if (checkLevelOver(enemies)) {
+      if (levelNumber == noOfLevels - 1) {
+        break;
+      }
+      else {
+        if (noDamageTakenCurrentLevel == true)
+          score += 200;
+        shop();
+        enemies = createLevel();
+      }
     }
-    if(checkLevelOver(enemies))
-       enemies = createLevel();
+
     showPlayer();
     getPlayerMovement();
     updateBullets();
@@ -180,92 +656,162 @@ void playGame() {
     checkPlayerCollision(enemies);
     checkBulletEnemiesCollision(enemies);
 
-    if(checkGameOver()) {
-      gameOverTime = millis();
+    if (checkGameOver()) {
+      isGameOver = true;
       break;
-    }   
-  } 
-  gameOver();
-}
-
-bool checkLevelOver(Enemie *enemies) {
-  int numberOfDeadEnemies = 0;
-  for(int i = 0; i < noOfEnemies; i++) {
-    if(enemies[i].posX == -7)
-      numberOfDeadEnemies++;
-  }
-
-  if(numberOfDeadEnemies == noOfEnemies) {
-    delete[] enemies;
-    return 1;
-  }
-  return 0;
-}
-
-void checkBulletEnemiesCollision(Enemie *enemies) {
-  for(int i = 0; i < noOfBullets; i++) 
-    for(int j = 0; j < noOfEnemies; j++) {
-      if(bullets[i].posX != -3 && enemies[j].posX != -7) {
-        if((bullets[i].posX == enemies[j].posX && bullets[i].posY == enemies[j].posY) || 
-            (bullets[i].posX == enemies[j].posX - 1 && bullets[i].posY == enemies[j].posY - 1) ||
-            (bullets[i].posX == enemies[j].posX + 1 && bullets[i].posY == enemies[j].posY - 1)) {
-              if(bullets[i].posY > 7)
-                lc.setLed(1, bullets[i].posY % 8, bullets[i].posX, false);
-              else 
-                lc.setLed(0, bullets[i].posY, bullets[i].posX, false);
-                
-              if(enemies[j].posY < 8) {
-                lc.setLed(0, enemies[j].posY - 1, enemies[j].posX - 1, false);
-                lc.setLed(0, enemies[j].posY, enemies[j].posX, false);
-                lc.setLed(0, enemies[j].posY - 1, enemies[j].posX + 1, false);
-              }
-              else {
-                lc.setLed(1, enemies[j].posY % 8 - 1, enemies[j].posX - 1, false);
-                lc.setLed(1, enemies[j].posY % 8, enemies[j].posX, false);
-                lc.setLed(1, enemies[j].posY % 8 - 1, enemies[j].posX + 1, false);
-              }
-              enemies[j].posX = -7;
-              bullets[i].posX = -3;
-              score += (levelNumber + 1) * 10;
-            }
-      }
     }
-}
-
-void checkPlayerCollision(Enemie *enemies) {
-  for(int i = 0; i < noOfEnemies; i++) {
-    if(((enemies[i].posY == 15 && enemies[i].posX == playerPos) ||
-       (enemies[i].posY == 15 && enemies[i].posX == playerPos - 1) ||
-       (enemies[i].posY == 15 && enemies[i].posX == playerPos + 1)) && 
-       millis() - lastInvulnTime > invulnDelay) {
-          lastInvulnTime = millis();
-          enemies[i].posX = -1;
-          lives--;
-       }   
   }
-}
-
-bool checkGameOver() {
-  if(lives == 0)
-    return 1;
-  return 0;
+  if (isGameOver == true)
+    gameOver();
+  else
+    infinityLevel();
 }
 
 void gameOver() {
   lcd.clear();
-  while(1) {
-    lcd.setCursor(0, 0);
-    lcd.print("Game Over!");
+  highscore high1;
+  highscore high2;
+  EEPROM.get(highscoreAddress1, high1);
+  EEPROM.get(highscoreAddress2, high2);
+
+  unsigned long nextScreenTime = millis();
+  const int nextScreenDelay = 10000;
+  if (score > high1.score) {
+    highscore newHigh;
+    newHigh.score = score;
+    strcpy(newHigh.name, playerName);
+    EEPROM.put(highscoreAddress2, high1);
+    EEPROM.put(highscoreAddress1, newHigh);
+
+    lcd.clear();
+    while (1) {
+      buttonValue = !digitalRead(buttonPin);
+      swValue = !digitalRead(joySW);
+
+      if (millis() - nextScreenTime > nextScreenDelay)
+        break;
+      if ((swValue == 1 || buttonValue == 1) && (swValue != lastSwValue || buttonValue != lastButtonValue))
+        break;
+
+      lcd.setCursor(0, 0);
+      lcd.print("Congrats, you");
+      lcd.setCursor(0, 1);
+      lcd.print("are number one!");
+
+      lastSwValue = swValue;
+      lastButtonValue = buttonValue;
+    }
   }
+  else if (score > high2.score) {
+    highscore newHigh;
+    newHigh.score = score;
+    strcpy(newHigh.name, playerName);
+    EEPROM.put(highscoreAddress2, newHigh);
+    lcd.clear();
+    while (1) {
+      buttonValue = !digitalRead(buttonPin);
+      swValue = !digitalRead(joySW);
+
+      if (millis() - nextScreenTime > nextScreenDelay)
+        break;
+      if ((swValue == 1 || buttonValue == 1) && (swValue != lastSwValue || buttonValue != lastButtonValue))
+        break;
+
+      lcd.setCursor(0, 0);
+      lcd.print("Congrats, you");
+      lcd.setCursor(0, 1);
+      lcd.print("are number two!");
+
+      lastSwValue = swValue;
+      lastButtonValue = buttonValue;
+    }
+  }
+  else {
+    lcd.clear();
+    while (1) {
+      buttonValue = !digitalRead(buttonPin);
+      swValue = !digitalRead(joySW);
+
+      if (millis() - nextScreenTime > nextScreenDelay)
+        break;
+      if ((swValue == 1 || buttonValue == 1) && (swValue != lastSwValue || buttonValue != lastButtonValue))
+        break;
+      lcd.setCursor(0, 0);
+      lcd.print("Game over, wanna");
+      lcd.setCursor(0, 1);
+      lcd.print("try again?");
+
+      lastSwValue = swValue;
+      lastButtonValue = buttonValue;
+    }
+  }
+  int currentPos = 0;
+  int tryPos = 0;
+  int backPos = 11;
+  lcd.clear();
+  delay(100);
+  while (1) {
+
+    xValue = analogRead(joyX);
+    buttonValue = !digitalRead(buttonPin);
+    swValue = !digitalRead(joySW);
+
+    if (xValue < minThreshold && xAxisNotMoved) {
+      if (currentPos == tryPos)
+        currentPos = backPos;
+      else currentPos = tryPos;
+      xAxisNotMoved = 0;
+    }
+    else if (xValue > maxThreshold && xAxisNotMoved) {
+      if (currentPos == tryPos)
+        currentPos = backPos;
+      else currentPos = tryPos;
+      xAxisNotMoved = 0;
+    }
+    else if (xValue < maxThreshold && xValue > minThreshold)
+      xAxisNotMoved = 1;
+    if ((swValue == 1 || buttonValue == 1) && (swValue != lastSwValue || buttonValue != lastButtonValue)) {
+      if (currentPos == tryPos)
+        playGame();
+      else
+        break;
+    }
+
+    lastButtonValue = buttonValue;
+    lastSwValue = swValue;
+
+    lcd.setCursor(3, 0);
+    lcd.print("Score:");
+    lcd.setCursor(9, 0);
+    lcd.print(score);
+    lcd.setCursor(1, 1);
+    lcd.print("Play again");
+    lcd.setCursor(12, 1);
+    lcd.print("Back");
+    lcd.setCursor(currentPos, 1);
+    lcd.print(">");
+    refreshLCD();
+  }
+  delay(100);
+  navigateMenu();
 }
 
 void showEnemies(Enemie *enemies) {
-  for(int i = 0; i < noOfEnemies; i++) {
-    if(enemies[i].posY == 16)
+  for (int i = 0; i < noOfEnemies; i++) {
+
+    if (enemies[i].posY == 16) {
+      enemies[i].posY = 18;
       enemies[i].posX = -7;
-        
-    if(millis() - enemies[i].createdTime > enemies[i].spawnTime && enemies[i].posX != -7) {
-      if(enemies[i].posY < 8) {
+    }
+
+    if (millis() - enemyCreateTime > enemyCreateDelay) {
+      enemies[enemyCounter].created = true;
+      enemyCounter++;
+      enemyCreateTime = millis();
+    }
+
+    if (enemies[i].created == true && enemies[i].posX != -7) {
+      if (enemies[i].posY < 8) {
         lc.setLed(0, enemies[i].posY - 1, enemies[i].posX - 1, true);
         lc.setLed(0, enemies[i].posY, enemies[i].posX, true);
         lc.setLed(0, enemies[i].posY - 1, enemies[i].posX + 1, true);
@@ -275,15 +821,15 @@ void showEnemies(Enemie *enemies) {
         lc.setLed(1, enemies[i].posY % 8, enemies[i].posX, true);
         lc.setLed(1, enemies[i].posY % 8 - 1, enemies[i].posX + 1, true);
       }
-    } 
+    }
   }
 }
 
 void updateEnemies(Enemie *enemies) {
-  for(int i = 0; i < noOfEnemies; i++) {
-    if(millis() - enemies[i].createdTime > enemies[i].spawnTime && enemies[i].posX != -7) {
-      if(millis() - enemies[i].movementTime > enemies[i].movementSpeed && enemies[i].posX != -7) {
-        if(enemies[i].posY < 8) {
+  for (int i = 0; i < noOfEnemies; i++) {
+    if (enemies[i].created == true && enemies[i].posX != -7) {
+      if (millis() - enemies[i].movementTime > enemiesMovementSpeed) {
+        if (enemies[i].posY < 8) {
           lc.setLed(0, enemies[i].posY - 1, enemies[i].posX - 1, false);
           lc.setLed(0, enemies[i].posY, enemies[i].posX, false);
           lc.setLed(0, enemies[i].posY - 1, enemies[i].posX + 1, false);
@@ -304,86 +850,75 @@ Enemie *createLevel() {
   levelNumber++;
   const int levelNumberOfEnemies = level[levelNumber];
   noOfEnemies = levelNumberOfEnemies;
-
-  int counter = 1000;
-  
+  enemyCounter = 0;
+  noDamageTakenCurrentLevel = true;
   Enemie *enemies = new Enemie[levelNumberOfEnemies];
-  for(int i = 0; i < levelNumberOfEnemies; ++i) {
+  enemiesMovementSpeed = (7 - levelNumber) * 25;
+  for (int i = 0; i < levelNumberOfEnemies; ++i) {
     enemies[i].posY = -2;
     enemies[i].posX = random(1, 6);
     enemies[i].movementTime = millis();
-    enemies[i].movementSpeed = (7 - levelNumber) * 50;
-    enemies[i].spawnTime = counter;
     enemies[i].createdTime = millis();
-    counter += 1500;
+    enemies[i].created = false;
   }
   return enemies;
 }
 
 void updateBullets() {
-  for(int i = 0; i < noOfBullets; i++) {
-    if(bullets[i].posX != -3 && millis() - bullets[i].movementDelay > bulletDelay) {
-      if(bullets[i].posY > 7)
+  for (int i = 0; i < noOfBullets; i++) {
+    if (bullets[i].posX != -3 && millis() - bullets[i].movementDelay > bulletDelay) {
+      if (bullets[i].posY > 7)
         lc.setLed(1, bullets[i].posY % 8, bullets[i].posX, false);
-      else 
+      else
         lc.setLed(0, bullets[i].posY, bullets[i].posX, false);
       bullets[i].movementDelay = millis();
-      bullets[i].posY--; 
+      bullets[i].posY--;
     }
   }
 }
 
 void showBullets() {
-  
-  for(int i = 0; i < noOfBullets; i++) {
-//    Serial.print("[");
-//    Serial.print(bullets[i].posX);
-//    Serial.print(", ");
-//    Serial.print(bullets[i].posY);
-//    Serial.print("], ");
-    if(bullets[i].posY == 0)
+
+  for (int i = 0; i < noOfBullets; i++) {
+    if (bullets[i].posY == 0)
       bullets[i].posX = -3;
-      
-    if(bullets[i].posX != -3)
-      if(bullets[i].posY > 7)
+
+    if (bullets[i].posX != -3)
+      if (bullets[i].posY > 7)
         lc.setLed(1, bullets[i].posY % 8, bullets[i].posX, true);
-      else 
+      else
         lc.setLed(0, bullets[i].posY, bullets[i].posX, true);
   }
-//  Serial.println();
 }
 
 void showPlayer() {
   checkBoundaries();
   lc.setLed(1, 7, playerPos, true);
   lc.setLed(1, 7, playerPos - 1, true);
-  lc.setLed(1, 7, playerPos + 1, true); 
+  lc.setLed(1, 7, playerPos + 1, true);
   lc.setLed(1, 6, playerPos - 1, true);
   lc.setLed(1, 6, playerPos + 1, true);
-  
+
   lc.setLed(1, 7, playerPos, false);
   lc.setLed(1, 7, playerPos - 1, false);
-  lc.setLed(1, 7, playerPos + 1, false); 
+  lc.setLed(1, 7, playerPos + 1, false);
   lc.setLed(1, 6, playerPos - 1, false);
   lc.setLed(1, 6, playerPos + 1, false);
 }
 
 void getPlayerMovement() {
-  xValue = analogRead(joyX);
-  yValue = analogRead(joyY);
-  swValue = !digitalRead(joySW);
-  buttonValue = !digitalRead(buttonPin);
+  readJoystickValues();
 
-  if(xValue < minThreshold && millis() - movementTime >= movementDelay) {
+  if (xValue < minThreshold && millis() - movementTime >= movementDelay) {
     playerPos++;
     movementTime = millis();
-  }  
-  else if(xValue > maxThreshold && millis() - movementTime >= movementDelay) {
+  }
+  else if (xValue > maxThreshold && millis() - movementTime >= movementDelay) {
     playerPos--;
     movementTime = millis();
   }
 
-  if((swValue == 1 || buttonValue == 1) && millis() - shootTime > shootDelay) {
+  if ((swValue == 1 || buttonValue == 1) && millis() - shootTime > shootDelay) {
     playerShoot();
     shootTime = millis();
   }
@@ -394,8 +929,8 @@ void playerShoot() {
   bullet.posX = playerPos;
   bullet.posY = 15;
   bullet.movementDelay = millis();
-  for(int i = 0; i < noOfBullets; i++)
-    if(bullets[i].posX == -3) {
+  for (int i = 0; i < noOfBullets; i++)
+    if (bullets[i].posX == -3) {
       bullets[i] = bullet;
       break;
     }
