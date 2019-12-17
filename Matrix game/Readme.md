@@ -47,3 +47,5 @@ To exit, swipe jostick to left.
 7. Wires
 8. Capacitors and resistors
 
+## Image 
+![Project image](project.jpg)
