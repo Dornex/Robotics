@@ -34,3 +34,16 @@ To exit, swipe jostick to left.
 ### Info
 
 **implemented but causes memory issues if enabled**
+
+
+
+## Hardware components
+1. Arduino Uno
+2. 8x8 LED matrix
+3. Joystick
+4. Button
+5. MAX7219 Driver
+6. PCB Board
+7. Wires
+8. Capacitors and resistors
+
