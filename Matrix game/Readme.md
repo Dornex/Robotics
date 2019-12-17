@@ -39,15 +39,25 @@ To exit, swipe jostick to left.
 
 ## Hardware components
 1. Arduino Uno
-2. 8x8 LED matrix
-3. Joystick
-4. Button
-5. MAX7219 Driver
-6. PCB Board
-7. Wires
-8. Capacitors and resistors
+2. 2 * 8x8 LED matrix
+3. LCD Display
+4. Joystick
+5. Button
+6. MAX7219 Driver
+7. PCB Board
+8. Wires
+9. Capacitors and resistors
 
 ## Image 
+
 ![Project image](project.jpg)
 
 ## Video 
+
+https://youtu.be/QNpVnlfoA0Q
+
+## Used libraries
+
+1. [LiquidMenu](https://github.com/VaSe7u/LiquidMenu) is a really easy to use library to make quick menus on a 16x2 LCD Display. I recommend it for quick PoC, but proves to be quite memory heavy for bigger projects.
+2. LedControl is used for controlling the LED's on the two matrixes.
+3. LiquidCrystal is used for controlling the LCD.
