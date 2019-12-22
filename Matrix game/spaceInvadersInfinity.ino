@@ -297,86 +297,99 @@ void viewInfo() {
   }
 }
 
-//void viewSettings() {
-//  menus.change_menu(settings_menu);
-//  menus.update();
-//  int level = 1;
-//  int index = 0;
-//  unsigned long blinkTime = 0, refreshLCD = 0;
-//  const int blinkDelay = 500, refreshRate = 800;
-//  lcd.setCursor(6, 0);
-//  lcd.print(playerName);
-//
-//  bool selectedBlink = 1;
-//  bool blinking = true;
-//  while (1) {
-//
-//    yValue = analogRead(joyY);
-//    swValue = !digitalRead(joySW);
-//    buttonValue = !digitalRead(buttonPin);
-//
-//    if (yValue < minThreshold && yAxisNotMoved) {
-//      selectedBlink = !selectedBlink;
-//      yAxisNotMoved = 0;
-//    }
-//    else if (yValue > maxThreshold && yAxisNotMoved) {
-//      selectedBlink = !selectedBlink;
-//      yAxisNotMoved = 0;
-//    }
-//    else if (yValue < maxThreshold && yValue > minThreshold)
-//      yAxisNotMoved = 1;
-//
-//    if (selectedBlink == 0) {
-//      if (millis() - blinkTime > blinkDelay) {
-//        blinkTime = millis();
-//        if (blinking == 0) {
-//          for (int i = 6; i < 13; i++) {
-//            lcd.setCursor(i, 0);
-//            lcd.print(playerName[i - 6]);
-//          }
-//        }
-//        else {
-//          for (int i = 6; i < 13; i++) {
-//            lcd.setCursor(i, 0);
-//            lcd.print(" ");
-//          }
-//        }
-//        blinking = !blinking;
-//      }
-//    }
-//    else {
-//      lcd.setCursor(6, 0);
-//      lcd.print(playerName);
-//    }
-//
-//    if (selectedBlink == 1) {
-//      if (millis() - blinkTime > blinkDelay) {
-//        blinkTime = millis();
-//        if (blinking == 0) {
-//          lcd.setCursor(15, 1);
-//          lcd.print(level);
-//        } else {
-//          lcd.setCursor(15, 1);
-//          lcd.print(" ");
-//        }
-//      }
-//      blinking = !blinking;
-//    }
-//    else {
-//      lcd.setCursor(15, 1);
-//      lcd.print(level);
-//    }
-//
-//    if (millis() - refreshLCD > refreshRate) {
-//      lcd.clear();
-//      settings_menu.update();
-//      refreshLCD = millis();
-//    }
-//
-//    lastButtonValue = buttonValue;
-//    lastSwValue = swValue;
-//  }
-//}
+/*
+ * This is commented because of reasons stated before:
+ * I can't enable this or I'll have memory issues because of the library used
+
+void viewSettings() {
+  menus.change_menu(settings_menu);
+  menus.update();
+  int level = 1;
+  int index = 0;
+  unsigned long blinkTime = 0, refreshLCD = 0;
+  const int blinkDelay = 500, refreshRate = 800;
+  lcd.setCursor(6, 0);
+  lcd.print(playerName);
+
+  bool selectedBlink = 1;
+  bool blinking = true;
+  while (1) {
+
+    yValue = analogRead(joyY);
+    swValue = !digitalRead(joySW);
+    buttonValue = !digitalRead(buttonPin);
+
+    if (yValue < minThreshold && yAxisNotMoved) {
+      selectedBlink = !selectedBlink;
+      yAxisNotMoved = 0;
+    }
+    else if (yValue > maxThreshold && yAxisNotMoved) {
+      selectedBlink = !selectedBlink;
+      yAxisNotMoved = 0;
+    }
+    else if (yValue < maxThreshold && yValue > minThreshold)
+      yAxisNotMoved = 1;
+
+    if (selectedBlink == 0) {
+      if (millis() - blinkTime > blinkDelay) {
+        blinkTime = millis();
+        if (blinking == 0) {
+          for (int i = 6; i < 13; i++) {
+            lcd.setCursor(i, 0);
+            lcd.print(playerName[i - 6]);
+          }
+        }
+        else {
+          for (int i = 6; i < 13; i++) {
+            lcd.setCursor(i, 0);
+            lcd.print(" ");
+          }
+        }
+        blinking = !blinking;
+      }
+    }
+    else {
+      lcd.setCursor(6, 0);
+      lcd.print(playerName);
+    }
+
+    if (selectedBlink == 1) {
+      if (millis() - blinkTime > blinkDelay) {
+        blinkTime = millis();
+        if (blinking == 0) {
+          lcd.setCursor(15, 1);
+          lcd.print(level);
+        } else {
+          lcd.setCursor(15, 1);
+          lcd.print(" ");
+        }
+      }
+      blinking = !blinking;
+    }
+    else {
+      lcd.setCursor(15, 1);
+      lcd.print(level);
+    }
+
+    if (millis() - refreshLCD > refreshRate) {
+      lcd.clear();
+      settings_menu.update();
+      refreshLCD = millis();
+    }
+
+    lastButtonValue = buttonValue;
+    lastSwValue = swValue;
+  }
+}
+
+void refreshSettingsLCD() {
+  if (millis() - lastRefresh > refreshRate) {
+    lastRefresh = millis();
+    lcd.clear();
+    settings_menu.update();
+  }
+}
+*/
 
 void readJoystickValues() {
   xValue = analogRead(joyX);
@@ -582,6 +595,8 @@ void playGame() {
   for (int i = 0; i < lc.getDeviceCount(); i++)
     lc.clearDisplay(i);
 
+  //This while is a 'game loop' where I get out of it if the player loses or
+  //gets to the infinity level (aka finishes the last level)
   while (1) {
     printGameLCD();
     refreshGameLCD();
@@ -684,6 +699,7 @@ void infinityLevel() {
   noOfEnemies = maxNumberOfEnemies;
   enemiesDefeated = 0;
 
+  //Similar to createLevel function, I generate first few random enemies
   for (int i = 0; i < maxNumberOfEnemies; ++i) {
     enemies[i].posY = -2;
     enemies[i].posX = random(1, 6);
@@ -692,6 +708,7 @@ void infinityLevel() {
     enemies[i].created = false;
   }
 
+  //Similar to the game loop used in playGame function
   while (1) {
     printGameLCD();
     refreshGameLCD();
@@ -728,14 +745,6 @@ void increaseDifficulty() {
   if (enemiesMovementSpeed < 15)
     enemiesMovementSpeed = 15;
 }
-
-//void refreshSettingsLCD() {
-//  if (millis() - lastRefresh > refreshRate) {
-//    lastRefresh = millis();
-//    lcd.clear();
-//    settings_menu.update();
-//  }
-//}
 
 void printShopLCD(int currentPos) {
   lcd.setCursor(0, 0);
@@ -790,6 +799,7 @@ void shop() {
           lcd.print("Not enough score!");
           lcd.setCursor(0, 1);
           lcd.print("Next level coming");
+          
           //Show a text, wait for the player to read and continue with the game.
           delay(3000);
           break;
@@ -992,4 +1002,3 @@ void gameOver() {
   }
   navigateMenu();
 }
-
