@@ -1,1 +1,1 @@
-![Idea](/idea.png)
+![Idea](idea.png)
