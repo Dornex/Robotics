@@ -59,6 +59,7 @@ The cube solution was calculated using [Rubik-Solver Python library](https://pyp
 
 ## Video 
 
+https://youtu.be/Y3anCi9ySDQ
 
 ## Used libraries
 
